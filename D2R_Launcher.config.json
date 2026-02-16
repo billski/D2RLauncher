@@ -1,0 +1,16 @@
+{
+    "clients":  [
+                    {
+                        "name":  "Client 1",
+                        "path":  "C:\\Program Files (x86)\\Diablo II Resurrected"
+                    },
+                    {
+                        "name":  "Client 2",
+                        "path":  "C:\\Program Files (x86)\\Diablo II Resurrected - Copy"
+                    },
+                    {
+                        "name":  "Client 3",
+                        "path":  "C:\\Program Files (x86)\\Diablo II Resurrected - Copy (2)"
+                    }
+                ]
+}
