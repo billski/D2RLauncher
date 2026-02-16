@@ -2,7 +2,12 @@ Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
 # Configuration
-$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+# Get script directory - works even if script is run from different location
+if ($MyInvocation.MyCommand.Path) {
+    $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+} else {
+    $scriptDir = $PSScriptRoot
+}
 $configFile = Join-Path $scriptDir "D2R_Launcher.config.json"
 $handleExe = Join-Path $scriptDir "handle.exe"  # Local copy in app folder
 $battleNetExe = "C:\Program Files (x86)\Battle.net\Battle.net Launcher.exe"  # Default Battle.net path (not used, kept for reference)
@@ -40,6 +45,27 @@ function Save-Config {
     $config | ConvertTo-Json | Set-Content $configFile
 }
 
+# Function to normalize path for comparison (removes trailing slashes, normalizes case)
+function Normalize-PathForComparison {
+    param([string]$path)
+    if (-not $path) { return "" }
+    # Convert to absolute path, remove trailing slashes, normalize case
+    # Use Resolve-Path to handle any symlinks or relative paths
+    try {
+        $trimmed = $path.TrimEnd('\', '/')
+        if ([System.IO.Path]::IsPathRooted($trimmed)) {
+            $normalized = [System.IO.Path]::GetFullPath($trimmed)
+        } else {
+            $normalized = [System.IO.Path]::GetFullPath((Resolve-Path $trimmed -ErrorAction Stop).Path)
+        }
+        return $normalized.ToLower()
+    } catch {
+        # Fallback: just normalize what we have
+        $trimmed = $path.TrimEnd('\', '/')
+        return $trimmed.ToLower()
+    }
+}
+
 # Function to get running clients
 function Get-RunningClients {
     $runningClients = @()
@@ -52,23 +78,49 @@ function Get-RunningClients {
         $d2rProcesses = @($d2rProcesses)
     }
     
+    # Build a map of normalized D2R.exe paths to their client indices
+    # Only match by exact executable path to avoid ambiguity
+    $clientExeMap = @{}
+    for ($i = 0; $i -lt 5; $i++) {
+        $clientPath = $clientPathBoxes[$i].Text.Trim()
+        if ($clientPath -and (Test-Path $clientPath)) {
+            # Get the exact expected D2R.exe path for this client
+            # Use Resolve-Path to get the canonical path, then join
+            try {
+                $resolvedClientPath = (Resolve-Path $clientPath -ErrorAction Stop).Path
+                $expectedD2RPath = Join-Path $resolvedClientPath "D2R.exe"
+                # Verify the file actually exists at this path
+                if (Test-Path $expectedD2RPath) {
+                    $normalizedExePath = Normalize-PathForComparison $expectedD2RPath
+                    # Store the mapping: normalized D2R.exe path -> client index
+                    $clientExeMap[$normalizedExePath] = $i
+                }
+            } catch {
+                # Path resolution failed, skip this client
+            }
+        }
+    }
+    
+    # Match each process to exactly one client by exact executable path only
     foreach ($process in $d2rProcesses) {
         try {
             $processPath = $process.Path
-            $processDir = Split-Path $processPath -Parent
+            if (-not $processPath) { continue }
             
-            for ($i = 0; $i -lt 5; $i++) {
-                $clientPath = $clientPathBoxes[$i].Text.Trim()
-                if ($clientPath -and (Test-Path $clientPath)) {
-                    $clientD2R = Join-Path $clientPath "D2R.exe"
-                    if ($processDir -eq $clientPath -or $processPath -eq $clientD2R) {
-                        $runningClients += $i
-                        break
-                    }
+            # Normalize the actual process executable path
+            $normalizedProcessPath = Normalize-PathForComparison $processPath
+            
+            # Match ONLY by exact executable path (most reliable, no ambiguity)
+            if ($clientExeMap.ContainsKey($normalizedProcessPath)) {
+                $matchedIndex = $clientExeMap[$normalizedProcessPath]
+                # Only add if not already in the list (prevent duplicates)
+                if ($runningClients -notcontains $matchedIndex) {
+                    $runningClients += $matchedIndex
                 }
             }
+            # If no match found, this process doesn't belong to any configured client
         } catch {
-            # Process path might not be accessible
+            # Process path might not be accessible, skip this process
         }
     }
     
@@ -108,9 +160,13 @@ function Close-AllHandles {
         return $true
     }
     
+    # Verify handle.exe exists and is accessible
     if (-not (Test-Path $handleExe)) {
         return $false
     }
+    
+    # Get absolute path to handle.exe to avoid any path resolution issues
+    $handleExeFullPath = (Resolve-Path $handleExe -ErrorAction Stop).Path
     
     if (-not ($d2rProcesses -is [System.Array])) {
         $d2rProcesses = @($d2rProcesses)
@@ -123,17 +179,53 @@ function Close-AllHandles {
         $processId = $d2rProcess.Id
         
         try {
-            $handleOutput = & $handleExe -p $processId -a 2>&1 | Out-String
+            # Execute handle.exe using Start-Process for better reliability
+            $processInfo = New-Object System.Diagnostics.ProcessStartInfo
+            $processInfo.FileName = $handleExeFullPath
+            $processInfo.Arguments = "-p $processId -a"
+            $processInfo.UseShellExecute = $false
+            $processInfo.RedirectStandardOutput = $true
+            $processInfo.RedirectStandardError = $true
+            $processInfo.CreateNoWindow = $true
             
-            if ($handleOutput -match [regex]::Escape($targetHandleName)) {
-                $lines = $handleOutput -split "`r?`n"
+            $process = New-Object System.Diagnostics.Process
+            $process.StartInfo = $processInfo
+            $process.Start() | Out-Null
+            $handleOutput = $process.StandardOutput.ReadToEnd()
+            $errorOutput = $process.StandardError.ReadToEnd()
+            $process.WaitForExit()
+            
+            # Combine output and error streams
+            $fullOutput = $handleOutput + $errorOutput
+            
+            if ($process.ExitCode -ne 0 -and $fullOutput -notmatch "No matching handles found") {
+                # handle.exe failed, but continue trying other processes
+                continue
+            }
+            
+            if ($fullOutput -match [regex]::Escape($targetHandleName)) {
+                $lines = $fullOutput -split "`r?`n"
                 for ($i = 0; $i -lt $lines.Count; $i++) {
                     if ($lines[$i] -match [regex]::Escape($targetHandleName)) {
                         for ($j = $i; $j -ge 0 -and ($i - $j) -le 3; $j--) {
                             if ($lines[$j] -match "^\s*([0-9A-Fa-f]+):\s*Event") {
                                 $handleNum = $matches[1]
-                                & $handleExe -c $handleNum -p $processId -y 2>&1 | Out-Null
-                                if ($LASTEXITCODE -eq 0) {
+                                
+                                # Close the handle
+                                $closeProcessInfo = New-Object System.Diagnostics.ProcessStartInfo
+                                $closeProcessInfo.FileName = $handleExeFullPath
+                                $closeProcessInfo.Arguments = "-c $handleNum -p $processId -y"
+                                $closeProcessInfo.UseShellExecute = $false
+                                $closeProcessInfo.RedirectStandardOutput = $true
+                                $closeProcessInfo.RedirectStandardError = $true
+                                $closeProcessInfo.CreateNoWindow = $true
+                                
+                                $closeProcess = New-Object System.Diagnostics.Process
+                                $closeProcess.StartInfo = $closeProcessInfo
+                                $closeProcess.Start() | Out-Null
+                                $closeProcess.WaitForExit()
+                                
+                                if ($closeProcess.ExitCode -eq 0) {
                                     $closedCount++
                                 }
                                 break
@@ -143,7 +235,8 @@ function Close-AllHandles {
                 }
             }
         } catch {
-            # Ignore errors
+            # If handle.exe execution fails, continue with next process
+            continue
         }
     }
     
@@ -184,7 +277,19 @@ function Launch-Client {
     $resultLabel.ForeColor = [System.Drawing.Color]::Blue
     $form.Refresh()
     
-    Close-AllHandles | Out-Null
+    # Verify handle.exe exists before trying to use it
+    if (-not (Test-Path $handleExe)) {
+        [System.Windows.Forms.MessageBox]::Show("handle.exe not found at:`n$handleExe`n`nPlease ensure handle.exe is in the same folder as this script.", "handle.exe Not Found", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
+        $resultLabel.Text = "Error: handle.exe not found. Cannot launch multiple clients."
+        $resultLabel.ForeColor = [System.Drawing.Color]::Red
+        return
+    }
+    
+    $handlesClosed = Close-AllHandles
+    if (-not $handlesClosed) {
+        # Handles might not exist (first client) or handle.exe failed
+        # Continue anyway - the launcher will handle it
+    }
     Start-Sleep -Milliseconds 500
     
     # Launch Diablo II Resurrected Launcher

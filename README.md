@@ -21,7 +21,22 @@ Before you start, make sure you have:
 
 ## Simple Step-by-Step Guide
 
-### Step 1: Copy Your Game Folder
+### Step 1: Configure Battle.net Settings
+
+**IMPORTANT:** You must configure Battle.net before using this launcher!
+
+1. Open Battle.net launcher
+2. Click the **Settings** icon (gear icon in the top left)
+3. Go to **Game Settings**
+4. Find **Diablo II Resurrected** in the list
+5. Check these two settings:
+   - ✅ **"Close Battle.net when a game launches"** - This MUST be enabled
+   - ✅ **"Allow multiple instances of Battle.net"** - This MUST be enabled
+6. Click **Done** to save
+
+**Why?** These settings allow each game client to run with its own Battle.net instance, so you can use different accounts.
+
+### Step 2: Copy Your Game Folder
 
 You need a separate copy of the game folder for each account you want to run.
 
@@ -37,13 +52,13 @@ You need a separate copy of the game folder for each account you want to run.
 
 **Important:** Each copy must be in a different folder. Don't just make shortcuts!
 
-### Step 2: Run the Launcher
+### Step 3: Run the Launcher
 
 1. Double-click `Launch_D2R_Launcher.bat`
 2. If Windows asks for administrator permission, click "Yes"
 3. The launcher window will open
 
-### Step 3: Set Up Your Clients
+### Step 4: Set Up Your Clients
 
 1. For each client you want to use:
    - Click the **"Browse"** button next to "Client 1:", "Client 2:", etc.
@@ -53,7 +68,7 @@ You need a separate copy of the game folder for each account you want to run.
 
 2. Your settings are saved automatically - you won't need to do this again!
 
-### Step 4: Launch a Client
+### Step 5: Launch a Client
 
 1. Click the **"Run Client X"** button for the client you want to launch
 2. The launcher will:
@@ -62,7 +77,7 @@ You need a separate copy of the game folder for each account you want to run.
 3. Log in with your Battle.net account when prompted
 4. The status will show "Running" in green when the client is active
 
-### Step 5: Launch More Clients
+### Step 6: Launch More Clients
 
 1. Click "Run Client X" for another client
 2. Log in with a different Battle.net account
@@ -93,9 +108,11 @@ You need a separate copy of the game folder for each account you want to run.
 - The folder must contain "Diablo II Resurrected Launcher.exe"
 
 **Problem: Can't launch a second client**
+- Make sure Battle.net settings are configured correctly (see Step 1)
 - Make sure the first client is fully loaded
 - Try clicking "Close All Handles" button, then launch again
 - Make sure you're using different game folder copies (not the same folder)
+- Make sure you're logging in with a different Battle.net account for each client
 
 **Problem: Path goes to wrong client when clicking Browse**
 - This was a bug that should be fixed. If it still happens, restart the launcher.
