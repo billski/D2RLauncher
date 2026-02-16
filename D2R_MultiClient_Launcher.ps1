@@ -4,8 +4,8 @@ Add-Type -AssemblyName System.Drawing
 # Configuration
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $configFile = Join-Path $scriptDir "D2R_Launcher.config.json"
-$handleExe = "C:\Tools\handle.exe"  # Adjust path if handle.exe is elsewhere
-$battleNetExe = "C:\Program Files (x86)\Battle.net\Battle.net Launcher.exe"  # Default Battle.net path
+$handleExe = Join-Path $scriptDir "handle.exe"  # Local copy in app folder
+$battleNetExe = "C:\Program Files (x86)\Battle.net\Battle.net Launcher.exe"  # Default Battle.net path (not used, kept for reference)
 
 # Config file structure: {"clients": [{"path": "...", "name": "Client 1"}, ...]}
 
@@ -187,25 +187,25 @@ function Launch-Client {
     Close-AllHandles | Out-Null
     Start-Sleep -Milliseconds 500
     
-    # Launch Battle.net
-    if (-not (Test-Path $battleNetExe)) {
-        [System.Windows.Forms.MessageBox]::Show("Battle.net Launcher not found at:`n$battleNetExe`n`nPlease update the path in the script.", "Battle.net Not Found", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
+    # Launch Diablo II Resurrected Launcher
+    $launcherExe = Join-Path $clientPath "Diablo II Resurrected Launcher.exe"
+    if (-not (Test-Path $launcherExe)) {
+        [System.Windows.Forms.MessageBox]::Show("Diablo II Resurrected Launcher.exe not found in:`n$clientPath`n`nPlease ensure the launcher file exists in the game folder.", "Launcher Not Found", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
         return
     }
     
     try {
-        # Launch Battle.net launcher
-        # Note: Battle.net will need to be configured to use the correct game folder
-        Start-Process $battleNetExe -WorkingDirectory (Split-Path $battleNetExe -Parent)
+        # Launch the Diablo II Resurrected Launcher
+        Start-Process $launcherExe -WorkingDirectory $clientPath
         
-        $resultLabel.Text = "Launched Battle.net for Client $($clientIndex + 1).`n`nGame folder: $clientPath`n`nPlease log in with your account and launch D2R from Battle.net."
+        $resultLabel.Text = "Launched Client $($clientIndex + 1).`n`nGame folder: $clientPath`n`nLauncher: Diablo II Resurrected Launcher.exe"
         $resultLabel.ForeColor = [System.Drawing.Color]::Green
         
         # Refresh status after delay
         Start-Sleep -Seconds 3
         Update-ClientStatus
     } catch {
-        $resultLabel.Text = "Error launching Battle.net: $($_.Exception.Message)"
+        $resultLabel.Text = "Error launching client: $($_.Exception.Message)"
         $resultLabel.ForeColor = [System.Drawing.Color]::Red
     }
 }
@@ -220,14 +220,14 @@ function Browse-ClientPath {
     
     if ($folderDialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
         $selectedPath = $folderDialog.SelectedPath
-        $d2rExe = Join-Path $selectedPath "D2R.exe"
+        $launcherExe = Join-Path $selectedPath "Diablo II Resurrected Launcher.exe"
         
-        if (Test-Path $d2rExe) {
+        if (Test-Path $launcherExe) {
             $clientPathBoxes[$clientIndex].Text = $selectedPath
             Save-Config
             Update-ClientStatus
         } else {
-            [System.Windows.Forms.MessageBox]::Show("D2R.exe not found in selected folder.`nPlease select the game folder containing D2R.exe", "Invalid Folder", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning)
+            [System.Windows.Forms.MessageBox]::Show("Diablo II Resurrected Launcher.exe not found in selected folder.`nPlease select the game folder containing the launcher.", "Invalid Folder", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning)
         }
     }
 }
@@ -240,6 +240,16 @@ $form.StartPosition = "CenterScreen"
 $form.FormBorderStyle = "FixedDialog"
 $form.MaximizeBox = $false
 $form.MinimizeBox = $false
+
+# Set icon if it exists
+$iconPath = Join-Path $scriptDir "D2R_Launcher.ico"
+if (Test-Path $iconPath) {
+    try {
+        $form.Icon = New-Object System.Drawing.Icon($iconPath)
+    } catch {
+        # Icon loading failed, continue without icon
+    }
+}
 
 # Status label
 $statusLabel = New-Object System.Windows.Forms.Label
