@@ -4,7 +4,9 @@ A simple tool to run multiple Diablo II Resurrected clients on the same computer
 
 ## What This Does
 
-- Lets you run up to 5 Diablo II Resurrected clients at the same time
+- Lets you run up to 8 Diablo II Resurrected clients at the same time
+- Choose how many clients you want (2-8) with a simple dropdown
+- Defaults to 3 clients for easy setup
 - Each client can use a different Battle.net account
 - Automatically closes handles so you can launch multiple clients
 - Shows you which clients are running
@@ -48,7 +50,8 @@ You need a separate copy of the game folder for each account you want to run.
    - `C:\Games\D2R_Client1`
    - `C:\Games\D2R_Client2`
    - `C:\Games\D2R_Client3`
-   - etc.
+   - `C:\Games\D2R_Client4`
+   - etc. (up to 8 clients)
 
 **Important:** Each copy must be in a different folder. Don't just make shortcuts!
 
@@ -58,17 +61,24 @@ You need a separate copy of the game folder for each account you want to run.
 2. If Windows asks for administrator permission, click "Yes"
 3. The launcher window will open
 
-### Step 4: Set Up Your Clients
+### Step 4: Choose Number of Clients
 
-1. For each client you want to use:
+1. At the top of the launcher, you'll see a dropdown labeled **"Number of Clients"**
+2. Select how many clients you want to use (2-8)
+   - The default is 3 clients
+   - The interface will automatically show or hide client rows based on your selection
+
+### Step 5: Set Up Your Clients
+
+1. For each visible client:
    - Click the **"Browse"** button next to "Client 1:", "Client 2:", etc.
    - Navigate to and select the game folder for that client
    - The path will appear in the text box
-   - Repeat for each client you want to use (up to 5)
+   - Repeat for each client you want to use
 
 2. Your settings are saved automatically - you won't need to do this again!
 
-### Step 5: Launch a Client
+### Step 6: Launch a Client
 
 1. Click the **"Run Client X"** button for the client you want to launch
 2. The launcher will:
@@ -77,21 +87,24 @@ You need a separate copy of the game folder for each account you want to run.
 3. Log in with your Battle.net account when prompted
 4. The status will show "Running" in green when the client is active
 
-### Step 6: Launch More Clients
+### Step 7: Launch More Clients
 
 1. Click "Run Client X" for another client
 2. Log in with a different Battle.net account
-3. You can run up to 5 clients at the same time!
+3. You can run up to 8 clients at the same time (depending on your selection)!
 
 ## Understanding the Interface
 
 - **Status Label (top)**: Shows how many clients are currently running
+- **Number of Clients Dropdown**: Select how many clients to show (2-8). Default is 3.
 - **Client Path Box**: Shows the folder path for each client
 - **Browse Button**: Lets you select the game folder for that client
 - **Status (Stopped/Running)**: Shows if that client is currently running
 - **Run Client X Button**: Launches that client
 - **Close All Handles Button**: Manually closes handles (usually done automatically)
 - **Refresh Status Button**: Updates the status of all clients
+
+**Note:** The interface automatically adjusts when you change the number of clients. The form will resize and show/hide client rows as needed.
 
 ## Advanced Setup
 
@@ -120,10 +133,11 @@ You need a separate copy of the game folder for each account you want to run.
 ## How It Works (Technical)
 
 - Each client needs its own game folder copy
+- The launcher supports up to 8 clients, with a configurable number shown in the interface (default: 3)
 - The launcher detects which clients are running by checking process paths
 - Before launching a new client, it automatically closes the "check for other instances" handle from all running clients using `handle.exe`
 - The launcher runs "Diablo II Resurrected Launcher.exe" from each client's folder
-- Settings are saved in `D2R_Launcher.config.json`
+- Settings including the selected client count are saved in `D2R_Launcher.config.json`
 
 ## Files
 

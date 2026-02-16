@@ -12,14 +12,23 @@ $configFile = Join-Path $scriptDir "D2R_Launcher.config.json"
 $handleExe = Join-Path $scriptDir "handle.exe"  # Local copy in app folder
 $battleNetExe = "C:\Program Files (x86)\Battle.net\Battle.net Launcher.exe"  # Default Battle.net path (not used, kept for reference)
 
-# Config file structure: {"clients": [{"path": "...", "name": "Client 1"}, ...]}
+# Client configuration
+$maxClients = 8  # Maximum number of clients supported
+$defaultClientCount = 3  # Default number of clients to show
+$currentClientCount = $defaultClientCount  # Current number of visible clients
+
+# Config file structure: {"clients": [{"path": "...", "name": "Client 1"}, ...], "clientCount": 3}
 
 # Function to load config
 function Load-Config {
     if (Test-Path $configFile) {
         try {
             $content = Get-Content $configFile -Raw | ConvertFrom-Json
-            return $content.clients
+            $clients = $content.clients
+            if ($content.clientCount) {
+                $script:currentClientCount = $content.clientCount
+            }
+            return $clients
         } catch {
             return @()
         }
@@ -30,7 +39,7 @@ function Load-Config {
 # Function to save config
 function Save-Config {
     $clients = @()
-    for ($i = 0; $i -lt 5; $i++) {
+    for ($i = 0; $i -lt $currentClientCount; $i++) {
         $path = $clientPathBoxes[$i].Text.Trim()
         if ($path) {
             $clients += @{
@@ -41,6 +50,7 @@ function Save-Config {
     }
     $config = @{
         clients = $clients
+        clientCount = $currentClientCount
     }
     $config | ConvertTo-Json | Set-Content $configFile
 }
@@ -81,7 +91,7 @@ function Get-RunningClients {
     # Build a map of normalized D2R.exe paths to their client indices
     # Only match by exact executable path to avoid ambiguity
     $clientExeMap = @{}
-    for ($i = 0; $i -lt 5; $i++) {
+    for ($i = 0; $i -lt $maxClients; $i++) {
         $clientPath = $clientPathBoxes[$i].Text.Trim()
         if ($clientPath -and (Test-Path $clientPath)) {
             # Get the exact expected D2R.exe path for this client
@@ -131,7 +141,7 @@ function Get-RunningClients {
 function Update-ClientStatus {
     $runningClients = Get-RunningClients
     
-    for ($i = 0; $i -lt 5; $i++) {
+    for ($i = 0; $i -lt $currentClientCount; $i++) {
         $isRunning = $runningClients -contains $i
         $clientRunButtons[$i].Enabled = -not $isRunning
         
@@ -340,11 +350,13 @@ function Browse-ClientPath {
 # Create main form
 $form = New-Object System.Windows.Forms.Form
 $form.Text = "D2R Multi-Client Launcher"
-$form.Size = New-Object System.Drawing.Size(900, 650)
 $form.StartPosition = "CenterScreen"
 $form.FormBorderStyle = "FixedDialog"
 $form.MaximizeBox = $false
 $form.MinimizeBox = $false
+# Form height will be adjusted dynamically based on client count
+$initialFormHeight = 95 + ($defaultClientCount * 50) + 300
+$form.Size = New-Object System.Drawing.Size(900, $initialFormHeight)
 
 # Set icon if it exists
 $iconPath = Join-Path $scriptDir "D2R_Launcher.ico"
@@ -366,19 +378,38 @@ $form.Controls.Add($statusLabel)
 # Info label
 $infoLabel = New-Object System.Windows.Forms.Label
 $infoLabel.Location = New-Object System.Drawing.Point(10, 40)
-$infoLabel.Size = New-Object System.Drawing.Size(870, 40)
-$infoLabel.Text = "Configure up to 5 game folder paths. Each client can run with a different Battle.net account."
+$infoLabel.Size = New-Object System.Drawing.Size(870, 20)
+$infoLabel.Text = "Each client can run with a different Battle.net account."
 $infoLabel.Font = New-Object System.Drawing.Font("Microsoft Sans Serif", 9)
 $form.Controls.Add($infoLabel)
 
-# Client path controls (5 clients)
+# Client count selector
+$clientCountLabel = New-Object System.Windows.Forms.Label
+$clientCountLabel.Location = New-Object System.Drawing.Point(10, 65)
+$clientCountLabel.Size = New-Object System.Drawing.Size(150, 20)
+$clientCountLabel.Text = "Number of Clients:"
+$clientCountLabel.Font = New-Object System.Drawing.Font("Microsoft Sans Serif", 9)
+$form.Controls.Add($clientCountLabel)
+
+$clientCountCombo = New-Object System.Windows.Forms.ComboBox
+$clientCountCombo.Location = New-Object System.Drawing.Point(165, 63)
+$clientCountCombo.Size = New-Object System.Drawing.Size(80, 25)
+$clientCountCombo.DropDownStyle = [System.Windows.Forms.ComboBoxStyle]::DropDownList
+for ($i = 2; $i -le $maxClients; $i++) {
+    $clientCountCombo.Items.Add($i) | Out-Null
+}
+$clientCountCombo.SelectedItem = $currentClientCount
+$form.Controls.Add($clientCountCombo)
+
+# Client path controls (create all 8, but hide some initially)
 $clientPathBoxes = @()
 $clientBrowseButtons = @()
 $clientRunButtons = @()
 $clientStatusLabels = @()
+$clientLabels = @()
 
-$yStart = 90
-for ($i = 0; $i -lt 5; $i++) {
+$yStart = 95
+for ($i = 0; $i -lt $maxClients; $i++) {
     $yPos = $yStart + ($i * 50)
     
     # Client label
@@ -388,6 +419,7 @@ for ($i = 0; $i -lt 5; $i++) {
     $clientLabel.Text = "Client $($i + 1):"
     $clientLabel.Font = New-Object System.Drawing.Font("Microsoft Sans Serif", 9)
     $form.Controls.Add($clientLabel)
+    $clientLabels += $clientLabel
     
     # Path textbox
     $pathBox = New-Object System.Windows.Forms.TextBox
@@ -428,11 +460,58 @@ for ($i = 0; $i -lt 5; $i++) {
     $runBtn.Add_Click([scriptblock]::Create("Launch-Client $runIndex"))
     $form.Controls.Add($runBtn)
     $clientRunButtons += $runBtn
+    
+    # Initially hide clients beyond the default count
+    if ($i -ge $currentClientCount) {
+        $clientLabel.Visible = $false
+        $pathBox.Visible = $false
+        $browseBtn.Visible = $false
+        $statusLbl.Visible = $false
+        $runBtn.Visible = $false
+    }
 }
+
+# Function to update visible clients based on selected count
+function Update-VisibleClients {
+    param([int]$newCount)
+    
+    $script:currentClientCount = $newCount
+    
+    # Show/hide client controls
+    for ($i = 0; $i -lt $maxClients; $i++) {
+        $isVisible = $i -lt $newCount
+        $clientLabels[$i].Visible = $isVisible
+        $clientPathBoxes[$i].Visible = $isVisible
+        $clientBrowseButtons[$i].Visible = $isVisible
+        $clientStatusLabels[$i].Visible = $isVisible
+        $clientRunButtons[$i].Visible = $isVisible
+    }
+    
+    # Update button positions
+    $buttonY = $yStart + ($newCount * 50) + 10
+    $closeHandleButton.Location = New-Object System.Drawing.Point(10, $buttonY)
+    $refreshButton.Location = New-Object System.Drawing.Point(200, $buttonY)
+    
+    # Update result panel position
+    $resultPanel.Location = New-Object System.Drawing.Point(10, ($buttonY + 50))
+    
+    # Update form size
+    $form.Height = $buttonY + 250
+    
+    # Save config with new count
+    Save-Config
+    Update-ClientStatus
+}
+
+# Add event handler for client count dropdown
+$clientCountCombo.Add_SelectedIndexChanged({
+    $selectedCount = [int]$clientCountCombo.SelectedItem
+    Update-VisibleClients $selectedCount
+})
 
 # Buttons at bottom
 $closeHandleButton = New-Object System.Windows.Forms.Button
-$closeHandleButton.Location = New-Object System.Drawing.Point(10, 350)
+$closeHandleButton.Location = New-Object System.Drawing.Point(10, ($yStart + ($currentClientCount * 50) + 10))
 $closeHandleButton.Size = New-Object System.Drawing.Size(180, 35)
 $closeHandleButton.Text = "Close All Handles"
 $closeHandleButton.Font = New-Object System.Drawing.Font("Microsoft Sans Serif", 9)
@@ -452,24 +531,39 @@ $closeHandleButton.Add_Click({
 $form.Controls.Add($closeHandleButton)
 
 $refreshButton = New-Object System.Windows.Forms.Button
-$refreshButton.Location = New-Object System.Drawing.Point(200, 350)
+$refreshButton.Location = New-Object System.Drawing.Point(200, ($yStart + ($currentClientCount * 50) + 10))
 $refreshButton.Size = New-Object System.Drawing.Size(180, 35)
 $refreshButton.Text = "Refresh Status"
 $refreshButton.Font = New-Object System.Drawing.Font("Microsoft Sans Serif", 9)
 $refreshButton.Add_Click({ Update-ClientStatus })
 $form.Controls.Add($refreshButton)
 
-# Result label
+# Result console panel (with border)
+$resultPanel = New-Object System.Windows.Forms.Panel
+$resultPanel.Location = New-Object System.Drawing.Point(10, ($yStart + ($currentClientCount * 50) + 60))
+$resultPanel.Size = New-Object System.Drawing.Size(870, 200)
+$resultPanel.BorderStyle = [System.Windows.Forms.BorderStyle]::FixedSingle
+$resultPanel.BackColor = [System.Drawing.Color]::White
+$form.Controls.Add($resultPanel)
+
+# Result label (inside the panel)
 $resultLabel = New-Object System.Windows.Forms.Label
-$resultLabel.Location = New-Object System.Drawing.Point(10, 400)
-$resultLabel.Size = New-Object System.Drawing.Size(870, 200)
+$resultLabel.Location = New-Object System.Drawing.Point(5, 5)
+$resultLabel.Size = New-Object System.Drawing.Size(860, 190)
 $resultLabel.Font = New-Object System.Drawing.Font("Microsoft Sans Serif", 9)
 $resultLabel.Text = "Configure your client paths using the Browse buttons, then click Run to launch each client."
-$form.Controls.Add($resultLabel)
+$resultLabel.AutoSize = $false
+$resultPanel.Controls.Add($resultLabel)
 
 # Load config on startup
 $loadedClients = Load-Config
-for ($i = 0; $i -lt 5 -and $i -lt $loadedClients.Count; $i++) {
+# Update client count from config if available
+if ($currentClientCount -ne $defaultClientCount) {
+    $clientCountCombo.SelectedItem = $currentClientCount
+    Update-VisibleClients $currentClientCount
+}
+# Load client paths
+for ($i = 0; $i -lt $maxClients -and $i -lt $loadedClients.Count; $i++) {
     if ($loadedClients[$i].path) {
         $clientPathBoxes[$i].Text = $loadedClients[$i].path
     }
