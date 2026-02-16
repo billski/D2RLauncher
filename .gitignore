@@ -1,0 +1,5 @@
+# Ignore zip files
+*.zip
+
+# Ignore config files (user-specific)
+D2R_Launcher.config.json
