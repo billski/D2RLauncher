@@ -39,7 +39,7 @@ function Load-Config {
 # Function to save config
 function Save-Config {
     $clients = @()
-    for ($i = 0; $i -lt $currentClientCount; $i++) {
+    for ($i = 0; $i -lt $maxClients; $i++) {
         $path = $clientPathBoxes[$i].Text.Trim()
         if ($path) {
             $clients += @{
